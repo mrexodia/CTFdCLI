@@ -12,7 +12,6 @@ from rich.table import Table
 from tqdm import tqdm
 
 from ..core import ConfigManager, CTFdClient, Challenge
-from ..utils import show_subcommands
 
 app = typer.Typer(help="Sync challenges and files")
 console = Console()
@@ -238,24 +237,8 @@ def create_challenge_readme(challenge: Challenge, challenge_dir: Path):
 
 
 @app.callback(invoke_without_command=True)
-def main(ctx: typer.Context):
-    """Sync challenges from CTFd platform."""
-    if ctx.invoked_subcommand is None:
-        # Show available subcommands
-        subcommands = [
-            ("sync", "📥 Sync all challenges from CTFd platform (default action)"),
-            ("status", "📊 Show local sync status and statistics"),
-        ]
-
-        show_subcommands(
-            "sync",
-            subcommands,
-            "Sync challenges and files from CTFd"
-        )
-
-
-@app.command("sync")
-def sync_challenges(
+def main(
+    ctx: typer.Context,
     profile: str = typer.Option(None, "--profile", "-p", help="Profile to use"),
     category: str = typer.Option(None, "--category", "-c", help="Sync only specific category"),
     output_dir: str = typer.Option(None, "--output", "-o", help="Output directory (default: detect from context or 'challenges')"),
@@ -264,6 +247,30 @@ def sync_challenges(
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing files"),
     incremental: bool = typer.Option(True, "--incremental/--full", help="Only sync new/changed challenges"),
     current: bool = typer.Option(False, "--current", help="Sync only the current challenge (if in challenge directory)")
+):
+    """Sync challenges from CTFd platform."""
+    if ctx.invoked_subcommand is None:
+        sync_challenges(
+            profile=profile,
+            category=category,
+            output_dir=output_dir,
+            download_files=download_files,
+            create_readme=create_readme,
+            force=force,
+            incremental=incremental,
+            current=current,
+        )
+
+
+def sync_challenges(
+    profile: Optional[str] = None,
+    category: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    download_files: bool = True,
+    create_readme: bool = True,
+    force: bool = False,
+    incremental: bool = True,
+    current: bool = False,
 ):
     """Sync challenges from CTFd platform."""
 
@@ -586,7 +593,7 @@ def sync_status(
     if not categories:
         console.print("[yellow]No synced challenges found[/yellow]")
         if not metadata.get("last_sync"):
-            console.print("[yellow]Hint: Run 'ctfdcli sync sync' to sync challenges first[/yellow]")
+            console.print("[yellow]Hint: Run 'ctfdcli sync' to sync challenges first[/yellow]")
         return
 
     # Status table
