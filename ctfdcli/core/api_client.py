@@ -385,9 +385,6 @@ class CTFdClient:
 
         for attempt in submission_attempts:
             try:
-                # Debug: print the endpoint and payload being tried
-                self.console.print(f"[blue]Trying endpoint: {attempt['endpoint']} with payload: {attempt['payload']}[/blue]", style="dim")
-
                 data = self._make_request(
                     'POST',
                     attempt['endpoint'],
@@ -419,7 +416,6 @@ class CTFdClient:
             except CTFdAPIError as e:
                 error_msg = str(e)
                 last_error = error_msg
-                self.console.print(f"[red]Endpoint {attempt['endpoint']} failed: {error_msg}[/red]", style="dim")
 
                 # If we get a specific error that's not a 404, it might be the right endpoint
                 if '404' not in error_msg and '403' not in error_msg:
