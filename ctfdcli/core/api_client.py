@@ -2,6 +2,8 @@
 
 import os
 from typing import List, Optional, Dict, Any, Tuple
+from urllib.parse import urljoin, urlparse
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -185,7 +187,6 @@ class CTFdClient:
 
         # Method 4: URL fallback for name
         try:
-            from urllib.parse import urlparse
             parsed_url = urlparse(self.base_url)
             hostname = parsed_url.hostname
             if hostname and hostname != 'demo.ctfd.io' and ctf_info['name'] == "CTF":
@@ -267,6 +268,15 @@ class CTFdClient:
                 # If both fail, return 0
                 return 0
 
+    def _normalize_file_url(self, url: str) -> str:
+        """Return an absolute URL for a CTFd challenge attachment."""
+        parsed = urlparse(url)
+        if parsed.scheme and parsed.netloc:
+            return url
+        if url.startswith('/'):
+            return urljoin(f"{self.base_url}/", url)
+        return urljoin(f"{self.base_url}/files/", url)
+
     def get_challenge_files(self, challenge_id: int) -> List[str]:
         """Get challenge file URLs.
 
@@ -277,20 +287,11 @@ class CTFdClient:
             List of file URLs
         """
         data = self._make_request('GET', f'/challenges/{challenge_id}')
-        file_urls = []
-        for file in data.get('files', []):
-            # Handle both absolute URLs and relative file paths
-            if file.startswith('http'):
-                # Already a complete URL
-                file_urls.append(file)
-            elif file.startswith('/files/'):
-                # Path already starts with /files/, just prepend base URL
-                file_urls.append(f"{self.base_url}{file}")
-            else:
-                # Relative path without /files/ prefix
-                file_path = file.lstrip('/')  # Remove leading slash if present
-                file_urls.append(f"{self.base_url}/files/{file_path}")
-        return file_urls
+        return [
+            self._normalize_file_url(file_url)
+            for file_url in data.get('files', [])
+            if isinstance(file_url, str) and file_url
+        ]
 
     def download_file(self, url: str, local_path: str) -> bool:
         """Download a file from CTFd.
@@ -303,10 +304,13 @@ class CTFdClient:
             True if successful, False otherwise
         """
         try:
+            url = self._normalize_file_url(url)
             response = self.session.get(url, stream=True, timeout=self.timeout)
             response.raise_for_status()
 
-            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            local_dir = os.path.dirname(local_path)
+            if local_dir:
+                os.makedirs(local_dir, exist_ok=True)
 
             with open(local_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
