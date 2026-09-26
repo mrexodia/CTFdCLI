@@ -2,6 +2,8 @@
 
 import typer
 import re
+from pathlib import PurePosixPath
+from urllib.parse import unquote, urlparse
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -210,6 +212,11 @@ def parse_connection_info(connection_info: str) -> Dict[str, str]:
         'icon': '❓',
         'original': connection_info
     }
+
+
+def _attachment_name(url: str) -> str:
+    """Return a display-safe filename without a signed query string."""
+    return PurePosixPath(unquote(urlparse(url).path)).name or "attachment"
 
 
 @app.command("list")
@@ -502,7 +509,7 @@ def show_challenge(
         if challenge.files:
             details.append(f"\n[bold cyan]Files:[/bold cyan]")
             for file in challenge.files:
-                details.append(f"  • {file}")
+                details.append(f"  • {_attachment_name(file)}")
 
         if challenge.hints:
             details.append(f"\n[bold cyan]Hints:[/bold cyan]")
