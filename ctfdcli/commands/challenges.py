@@ -219,7 +219,8 @@ def list_challenges(
     solved: Optional[bool] = typer.Option(None, "--solved/--unsolved", help="Filter by solved status"),
     sort_by: str = typer.Option("category", "--sort", help="Sort by: category, name, points, solves"),
     reverse: bool = typer.Option(False, "--reverse", "-r", help="Reverse sort order"),
-    detailed: bool = typer.Option(False, "--detailed", "-d", help="Show detailed information")
+    detailed: bool = typer.Option(False, "--detailed", "-d", help="Show detailed information"),
+    include_locked: bool = typer.Option(False, "--include-locked", help="Include locked challenge placeholders")
 ):
     """List all available challenges."""
 
@@ -244,9 +245,23 @@ def list_challenges(
 
         # Get challenges (solve status is already included)
         challenges = client.get_challenges()
+        locked_count = sum(
+            challenge.type.lower() == "hidden" for challenge in challenges
+        )
+        if not include_locked:
+            challenges = [
+                challenge
+                for challenge in challenges
+                if challenge.type.lower() != "hidden"
+            ]
 
         if not challenges:
-            console.print("[yellow]No challenges found[/yellow]")
+            if locked_count and not include_locked:
+                console.print(
+                    f"[yellow]No unlocked challenges found ({locked_count} locked).[/yellow]"
+                )
+            else:
+                console.print("[yellow]No challenges found[/yellow]")
             return
 
         # Get CTF info for title
@@ -307,9 +322,12 @@ def list_challenges(
         solved_count = len([c for c in challenges if c.solved_by_me])
         displayed_count = len(filtered_challenges)
 
-        summary_text = f"Showing {displayed_count} of {total_challenges} challenges"
+        scope = "challenges" if include_locked else "available challenges"
+        summary_text = f"Showing {displayed_count} of {total_challenges} {scope}"
         if solved_count > 0:
             summary_text += f" | {solved_count} solved ({solved_count/total_challenges*100:.1f}%)"
+        if locked_count and not include_locked:
+            summary_text += f" | {locked_count} locked"
 
         console.print(f"\n[cyan]{summary_text}[/cyan]")
 
@@ -324,14 +342,14 @@ def _display_challenges_table(challenges, ctf_name="CTF", challenge_solvers=None
     team_members = team_members or {}
 
     table = Table(title=f"🚩 {ctf_name} - Challenges", show_header=True, header_style="bold magenta")
-    table.add_column("ID", style="dim", width=6)
-    table.add_column("Status", width=6)
-    table.add_column("Name", style="cyan", min_width=15)
-    table.add_column("Category", style="blue", width=12)
-    table.add_column("Type", style="magenta", width=10)
-    table.add_column("Points", style="green", width=8)
+    table.add_column("ID", style="dim", width=4)
+    table.add_column("Done", width=4)
+    table.add_column("Name", style="cyan", min_width=10)
+    table.add_column("Category", style="blue", width=8)
+    table.add_column("Type", style="magenta", width=5)
+    table.add_column("Pts", style="green", width=5)
     table.add_column("Solves", style="yellow", width=6)
-    table.add_column("Attempts", style="red", width=10)
+    table.add_column("Tries", style="red", width=7)
 
     # Add "Solved By" column if we have team information
     if team_members:
@@ -519,7 +537,8 @@ def list_solved(
         solved=True,
         sort_by=sort_by,
         reverse=reverse,
-        detailed=detailed
+        detailed=detailed,
+        include_locked=False
     )
 
 
@@ -538,7 +557,8 @@ def list_unsolved(
         solved=False,
         sort_by=sort_by,
         reverse=reverse,
-        detailed=detailed
+        detailed=detailed,
+        include_locked=False
     )
 
 
@@ -567,9 +587,14 @@ def list_categories(
             raise typer.Exit(1)
 
         challenges = client.get_challenges()
+        challenges = [
+            challenge
+            for challenge in challenges
+            if challenge.type.lower() != "hidden"
+        ]
 
         if not challenges:
-            console.print("[yellow]No challenges found[/yellow]")
+            console.print("[yellow]No unlocked challenges found[/yellow]")
             return
 
         # Group by category
