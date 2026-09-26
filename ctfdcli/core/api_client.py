@@ -444,7 +444,7 @@ class CTFdClient:
         data = self._make_request('GET', f'/scoreboard?count={count}')
 
         entries = []
-        for i, entry in enumerate(data, 1):
+        for i, entry in enumerate(data[:max(count, 0)], 1):
             entries.append(ScoreboardEntry(
                 pos=i,
                 account_id=entry['account_id'],
