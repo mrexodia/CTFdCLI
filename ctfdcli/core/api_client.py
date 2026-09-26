@@ -208,33 +208,59 @@ class CTFdClient:
         challenges = []
 
         for challenge_data in data:
-            # Get detailed challenge info
-            detailed = self._make_request('GET', f"/challenges/{challenge_data['id']}")
+            # Some challenge types intentionally return only their public summary
+            # until they are unlocked. Merge the detail response over that summary
+            # instead of assuming every standard field is present.
+            try:
+                detailed = self._make_request(
+                    'GET', f"/challenges/{challenge_data['id']}"
+                )
+            except CTFdAPIError:
+                detailed = {}
 
-            # Check if solved_by_me is available in the base data or detailed data
-            solved_by_me = challenge_data.get('solved_by_me', detailed.get('solved_by_me', False))
+            if not isinstance(detailed, dict):
+                detailed = {}
 
-            # Get current attempt count
-            attempts = self.get_challenge_attempts(detailed['id'])
+            challenge_id = challenge_data['id']
+            normalized = {**challenge_data, **detailed}
+            attempts = normalized.get('attempts')
+            if not isinstance(attempts, int):
+                attempts = (
+                    self.get_challenge_attempts(challenge_id)
+                    if 'description' in detailed
+                    else 0
+                )
 
-            challenge = Challenge(
-                id=detailed['id'],
-                name=detailed['name'],
-                description=detailed['description'],
-                category=detailed['category'],
-                value=detailed['value'],
-                tags=detailed.get('tags', []),
-                state=detailed.get('state', 'visible'),
-                max_attempts=detailed.get('max_attempts'),
-                type=detailed.get('type', 'standard'),
-                solves=detailed.get('solves', 0),
-                files=detailed.get('files', []),
-                hints=detailed.get('hints', []),
-                solved_by_me=solved_by_me,
+            tags = []
+            for tag in normalized.get('tags') or []:
+                if isinstance(tag, dict):
+                    tag = tag.get('value') or tag.get('name')
+                if tag:
+                    tags.append(str(tag))
+
+            files = [
+                self._normalize_file_url(file_url)
+                for file_url in normalized.get('files') or []
+                if isinstance(file_url, str) and file_url
+            ]
+
+            challenges.append(Challenge(
+                id=challenge_id,
+                name=normalized.get('name') or f"Challenge {challenge_id}",
+                description=normalized.get('description') or '',
+                category=normalized.get('category') or '',
+                value=normalized.get('value') or 0,
+                tags=tags,
+                state=normalized.get('state', 'visible'),
+                max_attempts=normalized.get('max_attempts') or None,
+                type=normalized.get('type', 'standard'),
+                solves=normalized.get('solves') or 0,
+                files=files,
+                hints=normalized.get('hints') or [],
+                solved_by_me=bool(normalized.get('solved_by_me', False)),
                 attempts=attempts,
-                connection_info=detailed.get('connection_info')
-            )
-            challenges.append(challenge)
+                connection_info=normalized.get('connection_info')
+            ))
 
         return challenges
 
