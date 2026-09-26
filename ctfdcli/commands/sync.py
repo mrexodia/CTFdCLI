@@ -330,6 +330,19 @@ def sync_challenges(
         # Get challenges
         console.print("[yellow]Fetching challenges...[/yellow]")
         challenges = client.get_challenges()
+        locked_count = sum(
+            challenge.type.lower() == "hidden" for challenge in challenges
+        )
+        if locked_count:
+            console.print(
+                f"[cyan]Skipping {locked_count} locked "
+                f"challenge{'s' if locked_count != 1 else ''}.[/cyan]"
+            )
+            challenges = [
+                challenge
+                for challenge in challenges
+                if challenge.type.lower() != "hidden"
+            ]
 
         if not challenges:
             console.print("[yellow]No challenges found[/yellow]")
